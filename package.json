@@ -1,0 +1,19 @@
+{
+  "name": "gvedc-report-keep-guardian",
+  "version": "1.0.1",
+  "description": "GVEDC报告守护者插件，自动生成报告并存入数据库，支持IDE启动时自动运行",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "gvedc",
+    "report",
+    "database",
+    "plugin",
+    "trae",
+    "work-manual"
+  ],
+  "author": "GVEDC Team",
+  "license": "MIT"
+}
