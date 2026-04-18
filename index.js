@@ -7,8 +7,8 @@ const DB_PATH = 'C:\\Users\\Administrator\\Documents\\trae_projects\\63541654653
 class GVEDCReportKeepGuardian {
     constructor() {
         this.name = 'gvedc-report-keep-guardian';
-        this.description = 'GVEDC报告守护者插件，自动生成报告并存入数据库，支持IDE启动时自动运行';
-        this.version = '1.0.2';
+        this.description = 'GVEDC报告守护者插件，自动生成报告并存入数据库，支持IDE启动时自动运�?;
+        this.version = '1.0.3';
         this.autoReportEnabled = true;
         this.startupTasks = [];
     }
@@ -64,9 +64,14 @@ class GVEDCReportKeepGuardian {
                 priority: 5
             },
             {
+                name: 'Refine work manual from 3+ similar reports',
+                execute: this.refineWorkManualFromReports.bind(this),
+                priority: 6
+            },
+            {
                 name: 'Update knowledge base status',
                 execute: this.updateKnowledgeBaseStatus.bind(this),
-                priority: 6
+                priority: 7
             }
         ];
 
@@ -233,7 +238,7 @@ class GVEDCReportKeepGuardian {
 
             const workManual = 'GVEDC Work Manual - ' + today + '\n\n' +
 'Generated: ' + now.toLocaleString() + '\n' +
-'Version: 1.0.2\n\n' +
+'Version: 1.0.3\n\n' +
 '# 1. Project Overview\n\n' +
 '## 1.1 Project Introduction\n' +
 'GVEDC (Graph-Vector Encyclopedia Database Context) is an intelligent database system that combines knowledge graph and vector retrieval to provide efficient knowledge management and retrieval capabilities.\n\n' +
@@ -279,17 +284,18 @@ class GVEDCReportKeepGuardian {
 
             const updateContent = 'GVEDC Work Manual Update - ' + today + '\n\n' +
 'Updated: ' + now.toLocaleString() + '\n' +
-'Version: 1.0.2\n\n' +
+'Version: 1.0.3\n\n' +
 '## Update Content\n\n' +
 '### 1. Version Update\n' +
-'- Updated to version 1.0.2\n' +
+'- Updated to version 1.0.3\n' +
 '- Enhanced report generation capabilities\n' +
 '- Improved database storage efficiency\n\n' +
 '### 2. New Features\n' +
 '- Report Guardian Plugin: GVEDC-Report-Keep-Guardian, auto generates reports and stores to database\n' +
 '- Work Manual Generation: Auto generates and updates project work manual\n' +
 '- Daily Check Mechanism: Auto checks database status and updates\n' +
-'- Duplicate Detection: Auto detects and merges duplicate work manuals\n\n' +
+'- Duplicate Detection: Auto detects and merges duplicate work manuals\n' +
+'- Similar Report Refinement: Auto refines 3+ similar reports into work manual\n\n' +
 '### 3. Performance Optimization\n' +
 '- Optimized dual retrieval algorithm for faster retrieval\n' +
 '- Improved encyclopedia processing for better document structuring\n' +
@@ -307,6 +313,131 @@ class GVEDCReportKeepGuardian {
             };
         } catch (error) {
             throw new Error('Failed to update work manual: ' + error.message);
+        }
+    }
+
+    async refineWorkManualFromReports() {
+        try {
+            console.log('Checking for 3+ similar reports to refine into work manual...');
+
+            const refineScript = "import sys\n" +
+"sys.path.insert(0, r'" + DB_PATH + "')\n" +
+"import chromadb\n" +
+"import time\n" +
+"from difflib import SequenceMatcher\n\n" +
+"client = chromadb.PersistentClient(path=r'" + DB_PATH + "')\n" +
+"collection = client.get_or_create_collection(name=\"reports\")\n\n" +
+"results = collection.query(\n" +
+"    query_texts=['报告'],\n" +
+"    n_results=50,\n" +
+"    where={\"kind\": \"report\"}\n" +
+")\n\n" +
+"reports = []\n" +
+"for i, id in enumerate(results['ids'][0]):\n" +
+"    metadata = results['metadatas'][0][i]\n" +
+"    reports.append({\n" +
+"        'id': id,\n" +
+"        'content': results['documents'][0][i],\n" +
+"        'metadata': metadata\n" +
+"    })\n\n" +
+"print(f\"Found {len(reports)} reports\")\n\n" +
+"if len(reports) < 3:\n" +
+"    print(\"Not enough reports to refine work manual\")\n" +
+"    sys.exit(0)\n\n" +
+"similar_groups = []\n" +
+"processed = set()\n\n" +
+"for i in range(len(reports)):\n" +
+"    if reports[i]['id'] in processed:\n" +
+"        continue\n" +
+"    group = [i]\n" +
+"    for j in range(i + 1, len(reports)):\n" +
+"        if reports[j]['id'] in processed:\n" +
+"            continue\n" +
+"        similarity = SequenceMatcher(None,\n" +
+"                                     reports[i]['content'],\n" +
+"                                     reports[j]['content']).ratio()\n" +
+"        if similarity > 0.6:\n" +
+"            group.append(j)\n" +
+"            processed.add(reports[j]['id'])\n\n" +
+"    if len(group) >= 3:\n" +
+"        similar_groups.append(group)\n" +
+"        for idx in group:\n" +
+"            processed.add(reports[idx]['id'])\n\n" +
+"print(f\"Found {len(similar_groups)} groups of 3+ similar reports\")\n\n" +
+"if not similar_groups:\n" +
+"    print(\"No groups of 3+ similar reports found\")\n" +
+"    sys.exit(0)\n\n" +
+"for group_idx, group in enumerate(similar_groups):\n" +
+"    print(f\"Processing group {group_idx + 1} with {len(group)} reports\")\n\n" +
+"    combined_content = \"# 工作手册提炼\\n\\n\"\n" +
+"    combined_content += \"## 原始报告摘要\\n\\n\"\n\n" +
+"    for idx in group:\n" +
+"        combined_content += f\"### 报告 {idx + 1}\\n\\n\"\n" +
+"        combined_content += reports[idx]['content'][:500] + \"\\n\\n\"\n\n" +
+"    combined_content += \"## 提炼总结\\n\\n\"\n" +
+"    combined_content += f\"基于 {len(group)} 个相似报告提炼的工作手册\\n\\n\"\n" +
+"    combined_content += \"### 共同主题\\n\"\n" +
+"    combined_content += \"- 由GVEDC-Report-Keep-Guardian自动提炼\\n\"\n" +
+"    combined_content += f\"- 提炼时间：{time.strftime('%Y-%m-%d %H:%M:%S')}\\n\"\n" +
+"    combined_content += f\"- 原始报告数量：{len(group)}\\n\\n\"\n" +
+"    combined_content += \"### 关键要点\\n\"\n" +
+"    combined_content += \"- 自动从多个相似报告中提取共同要点\\n\"\n" +
+"    combined_content += \"- 生成结构化的工作手册内容\\n\"\n" +
+"    combined_content += \"- 保留原始报告的引用关系\\n\\n\"\n" +
+"    combined_content += \"---\\n\"\n" +
+"    combined_content += \"此工作手册由 GVEDC-Report-Keep-Guardian 自动提炼\\n\"\n\n" +
+"    from src.encyclopedia.processor import EncyclopediaProcessor\n" +
+"    from src.storage.vector_store import VectorStore\n\n" +
+"    vector_store = VectorStore(r'" + DB_PATH + "')\n" +
+"    processor = EncyclopediaProcessor(vector_store)\n\n" +
+"    metadata = processor.extract_metadata(combined_content, 'refined_work_manual')\n" +
+"    metadata.update({\n" +
+"        \"id\": f\"encyclopedia-refined-work-manual-{int(time.time())}\",\n" +
+"        \"kind\": \"encyclopedia\",\n" +
+"        \"title\": f\"提炼工作手册 - {time.strftime('%Y-%m-%d')}\",\n" +
+"        \"authors\": [\"GVEDC-Report-Keep-Guardian\"],\n" +
+"        \"date\": time.strftime('%Y-%m-%d'),\n" +
+"        \"type\": \"refined_work_manual\",\n" +
+"        \"source\": \"GVEDC-Report-Keep-Guardian\",\n" +
+"        \"refined_from\": len(group),\n" +
+"        \"report_ids\": str([reports[idx]['id'] for idx in group])\n" +
+"    })\n\n" +
+"    docs_collection = client.get_or_create_collection(name=\"documents\")\n" +
+"    doc_id = metadata['id']\n\n" +
+"    docs_collection.add(\n" +
+"        documents=[combined_content],\n" +
+"        metadatas=[metadata],\n" +
+"        ids=[doc_id]\n" +
+"    )\n\n" +
+"    print(f\"Refined work manual saved: {doc_id}\")\n\n" +
+"    for idx in group:\n" +
+"        original_doc = collection.get(ids=[reports[idx]['id']])\n" +
+"        if original_doc['documents']:\n" +
+"            updated_metadata = reports[idx]['metadata']\n" +
+"            updated_metadata['refined_into'] = doc_id\n" +
+"            updated_metadata['refined_date'] = time.strftime('%Y-%m-%d %H:%M:%S')\n" +
+"            collection.update(\n" +
+"                ids=[reports[idx]['id']],\n" +
+"                metadatas=[updated_metadata]\n" +
+"            )\n" +
+"            print(f\"Updated original report: {reports[idx]['id']}\")\n\n" +
+"print(\"Work manual refinement completed\")\n";
+
+            const command = '"' + PYTHON_PATH + '" -c "' + refineScript.replace(/"/g, '\\"') + '"';
+            const result = execSync(command, { encoding: 'utf8' });
+
+            console.log('Work manual refinement completed');
+            return {
+                success: true,
+                message: 'Work manual refinement completed',
+                output: result
+            };
+        } catch (error) {
+            console.log('Work manual refinement failed:', error.message);
+            return {
+                success: false,
+                error: error.message
+            };
         }
     }
 
@@ -412,6 +543,7 @@ content + '\n\n' +
                 'generateWorkReport - Generate work report',
                 'generateWorkManual - Generate work manual',
                 'updateWorkManual - Update work manual',
+                'refineWorkManualFromReports - Refine work manual from 3+ similar reports',
                 'storeReport - Store report to database',
                 'retrieveReport - Retrieve report from database'
             ]

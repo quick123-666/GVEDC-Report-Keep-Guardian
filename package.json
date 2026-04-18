@@ -1,6 +1,6 @@
 {
   "name": "gvedc-report-keep-guardian",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "GVEDC报告守护者插件，自动生成报告并存入数据库，支持IDE启动时自动运行",
   "main": "index.js",
   "scripts": {

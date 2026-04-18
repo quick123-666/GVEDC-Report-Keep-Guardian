@@ -2,7 +2,7 @@
   "plugin": {
     "name": "GVEDC-Report-Keep-Guardian",
     "type": "core",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "loadOnStartup": true,
     "autoInitialize": true,
     "capabilities": [
