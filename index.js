@@ -8,7 +8,7 @@ class GVEDCReportKeepGuardian {
     constructor() {
         this.name = 'gvedc-report-keep-guardian';
         this.description = 'GVEDC报告守护者插件，自动生成报告并存入数据库，支持IDE启动时自动运行';
-        this.version = '1.0.1';
+        this.version = '1.0.2';
         this.autoReportEnabled = true;
         this.startupTasks = [];
     }
@@ -16,13 +16,13 @@ class GVEDCReportKeepGuardian {
     async initialize() {
         try {
             console.log('GVEDC Report Keep Guardian v' + this.version + ' initializing...');
-            
+
             this.loadStartupTasks();
-            
+
             await this.executeStartupTasks();
-            
+
             console.log('GVEDC Report Keep Guardian initialized successfully');
-            
+
             return {
                 success: true,
                 message: 'GVEDC Report Keep Guardian initialized successfully'
@@ -75,7 +75,7 @@ class GVEDCReportKeepGuardian {
 
     async executeStartupTasks() {
         console.log('Executing report generation tasks...');
-        
+
         for (const task of this.startupTasks) {
             try {
                 console.log('Executing task: ' + task.name);
@@ -85,24 +85,24 @@ class GVEDCReportKeepGuardian {
                 console.error('Task failed: ' + task.name, error);
             }
         }
-        
+
         console.log('All report generation tasks completed');
     }
 
     async generateDailyDatabaseReport() {
         try {
             console.log('Generating daily database check report...');
-            
+
             const command = '"' + PYTHON_PATH + '" "' + DAILY_CHECK_SCRIPT + '"';
-            
-            const result = execSync(command, { 
+
+            const result = execSync(command, {
                 encoding: 'utf8',
                 cwd: DB_PATH
             });
-            
+
             console.log('Daily database check report generated');
-            return { 
-                success: true, 
+            return {
+                success: true,
                 message: 'Daily database check report generated',
                 output: result
             };
@@ -114,32 +114,32 @@ class GVEDCReportKeepGuardian {
     async checkDatabaseUpdates() {
         try {
             console.log('Checking database updates...');
-            
+
             const fs = require('fs');
             const path = require('path');
-            
+
             const chromaDbPath = path.join(DB_PATH, 'chroma.sqlite3');
             const gvedcDbPath = path.join(DB_PATH, 'gvedc.db');
-            
+
             let report = 'Database update check report:\n\n';
-            
+
             if (fs.existsSync(chromaDbPath)) {
                 const stats = fs.statSync(chromaDbPath);
                 const sizeMB = (stats.size / (1024 * 1024)).toFixed(2);
                 const lastModified = stats.mtime.toLocaleString();
                 report += '- ChromaDB: ' + sizeMB + ' MB, last modified: ' + lastModified + '\n';
             }
-            
+
             if (fs.existsSync(gvedcDbPath)) {
                 const stats = fs.statSync(gvedcDbPath);
                 const sizeMB = (stats.size / (1024 * 1024)).toFixed(2);
                 const lastModified = stats.mtime.toLocaleString();
                 report += '- gvedc.db: ' + sizeMB + ' MB, last modified: ' + lastModified + '\n';
             }
-            
+
             console.log('Database update check completed');
-            return { 
-                success: true, 
+            return {
+                success: true,
                 message: 'Database update check completed',
                 report: report
             };
@@ -151,11 +151,11 @@ class GVEDCReportKeepGuardian {
     async saveProjectWorkReport() {
         try {
             console.log('Saving project work report...');
-            
+
             const now = new Date();
             const today = now.toISOString().split('T')[0];
             const timestamp = now.toLocaleString();
-            
+
             const report = 'GVEDC Project Work Report - ' + today + '\n\n' +
 'Generated: ' + timestamp + '\n\n' +
 'Plugin: GVEDC-Report-Keep-Guardian\n' +
@@ -169,12 +169,12 @@ class GVEDCReportKeepGuardian {
 '- Auto Report: Enabled\n' +
 '- Startup Tasks: Running\n' +
 '- Database: Connected\n';
-            
+
             await this.saveReportToDatabase(report, 'project_work_report', today);
-            
+
             console.log('Project work report saved');
-            return { 
-                success: true, 
+            return {
+                success: true,
                 message: 'Project work report saved',
                 report: report
             };
@@ -186,10 +186,10 @@ class GVEDCReportKeepGuardian {
     async updateKnowledgeBaseStatus() {
         try {
             console.log('Updating knowledge base status...');
-            
+
             const now = new Date();
             const today = now.toISOString().split('T')[0];
-            
+
             const statusReport = 'GVEDC Knowledge Base Status Report - ' + today + '\n\n' +
 'Generated: ' + now.toLocaleString() + '\n\n' +
 'Knowledge Base Status:\n' +
@@ -210,12 +210,12 @@ class GVEDCReportKeepGuardian {
 '3. Improve knowledge graph construction\n\n' +
 'Notes:\n' +
 'Knowledge base running stably, all core functions working properly.\n';
-            
+
             await this.saveReportToDatabase(statusReport, 'knowledge_base_status', today);
-            
+
             console.log('Knowledge base status updated');
-            return { 
-                success: true, 
+            return {
+                success: true,
                 message: 'Knowledge base status updated',
                 report: statusReport
             };
@@ -227,13 +227,13 @@ class GVEDCReportKeepGuardian {
     async generateWorkManual() {
         try {
             console.log('Generating work manual...');
-            
+
             const now = new Date();
             const today = now.toISOString().split('T')[0];
-            
+
             const workManual = 'GVEDC Work Manual - ' + today + '\n\n' +
 'Generated: ' + now.toLocaleString() + '\n' +
-'Version: 1.0.0\n\n' +
+'Version: 1.0.2\n\n' +
 '# 1. Project Overview\n\n' +
 '## 1.1 Project Introduction\n' +
 'GVEDC (Graph-Vector Encyclopedia Database Context) is an intelligent database system that combines knowledge graph and vector retrieval to provide efficient knowledge management and retrieval capabilities.\n\n' +
@@ -256,12 +256,12 @@ class GVEDCReportKeepGuardian {
 '- Control: Control via Trae IDE tool commands\n\n' +
 '---\n' +
 'This work manual was auto-generated by GVEDC-Report-Keep-Guardian\n';
-            
+
             await this.saveReportToDatabase(workManual, 'work_manual', today);
-            
+
             console.log('Work manual generated');
-            return { 
-                success: true, 
+            return {
+                success: true,
                 message: 'Work manual generated',
                 manual: workManual
             };
@@ -273,35 +273,35 @@ class GVEDCReportKeepGuardian {
     async updateWorkManual() {
         try {
             console.log('Updating work manual...');
-            
+
             const now = new Date();
             const today = now.toISOString().split('T')[0];
-            
+
             const updateContent = 'GVEDC Work Manual Update - ' + today + '\n\n' +
 'Updated: ' + now.toLocaleString() + '\n' +
-'Version: 1.0.1\n\n' +
+'Version: 1.0.2\n\n' +
 '## Update Content\n\n' +
-'### 1. New Features\n' +
+'### 1. Version Update\n' +
+'- Updated to version 1.0.2\n' +
+'- Enhanced report generation capabilities\n' +
+'- Improved database storage efficiency\n\n' +
+'### 2. New Features\n' +
 '- Report Guardian Plugin: GVEDC-Report-Keep-Guardian, auto generates reports and stores to database\n' +
 '- Work Manual Generation: Auto generates and updates project work manual\n' +
 '- Daily Check Mechanism: Auto checks database status and updates\n' +
 '- Duplicate Detection: Auto detects and merges duplicate work manuals\n\n' +
-'### 2. Performance Optimization\n' +
+'### 3. Performance Optimization\n' +
 '- Optimized dual retrieval algorithm for faster retrieval\n' +
 '- Improved encyclopedia processing for better document structuring\n' +
 '- Optimized database storage to reduce storage space\n\n' +
-'### 3. System Integration\n' +
-'- Seamless integration with Trae IDE\n' +
-'- Support for auto startup and task scheduling\n' +
-'- Rich API interfaces provided\n\n' +
 '---\n' +
 'This update was auto-generated by GVEDC-Report-Keep-Guardian\n';
-            
+
             await this.saveReportToDatabase(updateContent, 'work_manual_update', today);
-            
+
             console.log('Work manual updated');
-            return { 
-                success: true, 
+            return {
+                success: true,
                 message: 'Work manual updated',
                 update: updateContent
             };
@@ -313,7 +313,7 @@ class GVEDCReportKeepGuardian {
     async saveReportToDatabase(content, reportType, date) {
         try {
             console.log('Saving report to database: ' + reportType);
-            
+
             const saveScript = 'import sys\n' +
 'sys.path.insert(0, r\'' + DB_PATH + '\')\n' +
 'import chromadb\n' +
@@ -339,13 +339,13 @@ class GVEDCReportKeepGuardian {
 '    ids=[doc_id]\n' +
 ')\n\n' +
 'print(f"Report saved: {doc_id}")\n';
-            
+
             const command = '"' + PYTHON_PATH + '" -c "' + saveScript.replace(/"/g, '\\"') + '"';
             const result = execSync(command, { encoding: 'utf8' });
-            
+
             console.log('Report saved to database');
-            return { 
-                success: true, 
+            return {
+                success: true,
                 message: 'Report saved to database',
                 output: result
             };
@@ -358,16 +358,16 @@ class GVEDCReportKeepGuardian {
         try {
             const now = new Date();
             const today = now.toISOString().split('T')[0];
-            
+
             const report = 'GVEDC ' + reportType + ' Report - ' + today + '\n\n' +
 'Generated: ' + now.toLocaleString() + '\n' +
 'Report Type: ' + reportType + '\n\n' +
 content + '\n\n' +
 '---\n' +
 'This report was auto-generated by GVEDC-Report-Keep-Guardian\n';
-            
+
             await this.saveReportToDatabase(report, reportType.toLowerCase().replace(/\s+/g, '_'), today);
-            
+
             return {
                 success: true,
                 message: reportType + ' report generated and saved',
