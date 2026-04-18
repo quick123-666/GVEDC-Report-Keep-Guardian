@@ -49,8 +49,6 @@ trae.executeTool('generateReport', {
 - **版本**: 1.0.1
 - **日期**: 2026-04-18
 
-## 致谢
+## 关联项目
 
-Milla Jovovich 和 MemPalace 项目
-
-GitHub: milla-jovovich/mempalace
+本插件依赖 [GVEDC](https://github.com/quick123-666/Graph-Vector-Encyclopedia-Database-Context) 图谱向量数据库项目。
