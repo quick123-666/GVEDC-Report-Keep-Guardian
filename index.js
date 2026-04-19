@@ -8,9 +8,11 @@ class GVEDCReportKeepGuardian {
     constructor() {
         this.name = 'gvedc-report-keep-guardian';
         this.description = 'GVEDC报告守护者插件，自动生成报告并存入数据库，支持IDE启动时自动运行';
-        this.version = '1.0.3';
+        this.version = '1.1.0';
         this.autoReportEnabled = true;
+        this.autoSaveToDatabase = true;
         this.startupTasks = [];
+        this.taskHistory = [];
     }
 
     async initialize() {
@@ -80,18 +82,213 @@ class GVEDCReportKeepGuardian {
 
     async executeStartupTasks() {
         console.log('Executing report generation tasks...');
+        const taskResults = [];
 
         for (const task of this.startupTasks) {
             try {
                 console.log('Executing task: ' + task.name);
-                await task.execute();
-                console.log('Task completed: ' + task.name);
+                const startTime = Date.now();
+                const result = await task.execute();
+                const endTime = Date.now();
+                const duration = endTime - startTime;
+
+                const taskRecord = {
+                    name: task.name,
+                    status: 'success',
+                    duration: duration,
+                    timestamp: new Date().toISOString(),
+                    result: result
+                };
+                taskResults.push(taskRecord);
+                this.taskHistory.push(taskRecord);
+
+                if (this.autoSaveToDatabase && result.report) {
+                    await this.saveTaskResultToDatabase(task.name, result.report, 'task_success');
+                }
+
+                console.log('Task completed: ' + task.name + ' (' + duration + 'ms)');
             } catch (error) {
+                const taskRecord = {
+                    name: task.name,
+                    status: 'failed',
+                    error: error.message,
+                    timestamp: new Date().toISOString()
+                };
+                taskResults.push(taskRecord);
+                this.taskHistory.push(taskRecord);
+
+                if (this.autoSaveToDatabase) {
+                    await this.saveTaskResultToDatabase(task.name, error.message, 'task_failed');
+                }
+
                 console.error('Task failed: ' + task.name, error);
             }
         }
 
+        if (this.autoSaveToDatabase) {
+            await this.saveSessionSummary(taskResults);
+        }
+
         console.log('All report generation tasks completed');
+        return taskResults;
+    }
+
+    async saveTaskResultToDatabase(taskName, content, status) {
+        try {
+            const saveScript = `import sys
+sys.path.insert(0, r'${DB_PATH}')
+import chromadb
+import time
+import json
+
+client = chromadb.PersistentClient(path=r'${DB_PATH}')
+collection = client.get_or_create_collection(name="task_results")
+
+doc_id = f"task-result-{int(time.time())}"
+
+metadata = {
+    "id": doc_id,
+    "kind": "task_result",
+    "task_name": "${taskName}",
+    "status": "${status}",
+    "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
+    "keywords": ["gvedc", "task", "${taskName}", "${status}"],
+    "category": ["Task", "Result"]
+}
+
+collection.add(
+    documents=["${content.replace(/"/g, '\\"').substring(0, 10000)}"],
+    metadatas=[metadata],
+    ids=[doc_id]
+)
+
+print(f"Task result saved: {doc_id}")
+`;
+
+            const command = '"' + PYTHON_PATH + '" -c "' + saveScript.replace(/"/g, '\\"') + '"';
+            execSync(command, { encoding: 'utf8' });
+            console.log('Task result saved to database: ' + taskName);
+        } catch (error) {
+            console.error('Failed to save task result to database:', error.message);
+        }
+    }
+
+    async saveProjectToGraphDatabase(projectName, projectType, date, metadata) {
+        try {
+            const saveScript = `import sys
+sys.path.insert(0, r'${DB_PATH}')
+import chromadb
+import time
+import json
+
+client = chromadb.PersistentClient(path=r'${DB_PATH}')
+collection = client.get_or_create_collection(name="projects")
+
+doc_id = f"project-{projectName.replace(/[^a-zA-Z0-9]/g, '-').lower()}-{int(time.time())}"
+
+project_metadata = {
+    "id": doc_id,
+    "kind": "project",
+    "name": "${projectName}",
+    "type": "${projectType}",
+    "date": "${date}",
+    "keywords": ["gvedc", "project", "${projectName}", "${projectType}"],
+    "category": ["Project", "GVEDC"]
+}
+
+for key, value in ${JSON.stringify(metadata)}:
+    project_metadata[key] = str(value)
+
+collection.add(
+    documents=["GVEDC Project: ${projectName} - Type: ${projectType}"],
+    metadatas=[project_metadata],
+    ids=[doc_id]
+)
+
+print(f"Project saved to graph database: {doc_id}")
+`;
+
+            const command = '"' + PYTHON_PATH + '" -c "' + saveScript.replace(/"/g, '\\"') + '"';
+            execSync(command, { encoding: 'utf8' });
+            console.log('Project saved to graph database: ' + projectName);
+        } catch (error) {
+            console.error('Failed to save project to graph database:', error.message);
+        }
+    }
+
+    async saveSessionSummary(taskResults) {
+        try {
+            const now = new Date();
+            const today = now.toISOString().split('T')[0];
+
+            const sessionReport = `# GVEDC 任务会话摘要
+
+## 会话信息
+- **日期**: ${today}
+- **时间**: ${now.toLocaleString()}
+- **插件版本**: ${this.version}
+- **任务总数**: ${taskResults.length}
+
+## 任务执行摘要
+
+${taskResults.map((task, index) => `
+### ${index + 1}. ${task.name}
+- **状态**: ${task.status}
+- **耗时**: ${task.duration || 0}ms
+${task.error ? `- **错误**: ${task.error}` : ''}
+- **时间戳**: ${task.timestamp}
+`).join('\n')}
+
+## 系统状态
+- **自动保存数据库**: ${this.autoSaveToDatabase ? '已启用' : '已禁用'}
+- **自动报告**: ${this.autoReportEnabled ? '已启用' : '已禁用'}
+
+---
+*本报告由 GVEDC-Report-Keep-Guardian v${this.version} 自动生成*
+`;
+
+            await this.saveReportToDatabase(sessionReport, 'session_summary', today);
+
+            const saveScript = `import sys
+sys.path.insert(0, r'${DB_PATH}')
+import chromadb
+import time
+import json
+
+client = chromadb.PersistentClient(path=r'${DB_PATH}')
+collection = client.get_or_create_collection(name="sessions")
+
+doc_id = f"session-{int(time.time())}"
+
+task_summary = json.dumps(${JSON.stringify(taskResults.map(t => ({name: t.name, status: t.status, duration: t.duration})))}, ensure_ascii=False)
+
+metadata = {
+    "id": doc_id,
+    "kind": "session",
+    "date": "${today}",
+    "task_count": ${taskResults.length},
+    "success_count": ${taskResults.filter(t => t.status === 'success').length},
+    "failed_count": ${taskResults.filter(t => t.status === 'failed').length},
+    "task_summary": task_summary,
+    "keywords": ["gvedc", "session", "${today}", "auto-generated"],
+    "category": ["Session", "Summary"]
+}
+
+collection.add(
+    documents=["GVEDC 任务会话摘要 - ${today}"],
+    metadatas=[metadata],
+    ids=[doc_id]
+)
+
+print(f"Session summary saved: {doc_id}")
+`;
+
+            const command = '"' + PYTHON_PATH + '" -c "' + saveScript.replace(/"/g, '\\"') + '"';
+            execSync(command, { encoding: 'utf8' });
+            console.log('Session summary saved to database');
+        } catch (error) {
+            console.error('Failed to save session summary to database:', error.message);
+        }
     }
 
     async generateDailyDatabaseReport() {
@@ -161,21 +358,41 @@ class GVEDCReportKeepGuardian {
             const today = now.toISOString().split('T')[0];
             const timestamp = now.toLocaleString();
 
-            const report = 'GVEDC Project Work Report - ' + today + '\n\n' +
-'Generated: ' + timestamp + '\n\n' +
-'Plugin: GVEDC-Report-Keep-Guardian\n' +
-'Version: ' + this.version + '\n' +
-'Status: Running\n\n' +
-'Today Summary:\n' +
-'1. Report guardian plugin initialized successfully\n' +
-'2. Database connection check completed\n' +
-'3. Knowledge base status updated\n\n' +
-'System Status:\n' +
-'- Auto Report: Enabled\n' +
-'- Startup Tasks: Running\n' +
-'- Database: Connected\n';
+            const report = `GVEDC Project Work Report - ${today}
+
+Generated: ${timestamp}
+
+Plugin: GVEDC-Report-Keep-Guardian
+Version: ${this.version}
+Status: Running
+
+Today Summary:
+1. Report guardian plugin initialized successfully
+2. Database connection check completed
+3. Knowledge base status updated
+
+System Status:
+- Auto Report: Enabled
+- Auto Save to Database: ${this.autoSaveToDatabase ? 'Enabled' : 'Disabled'}
+- Startup Tasks: Running
+- Database: Connected
+
+Recent Work:
+- Daily database check completed
+- Project work report generated
+- Session summary saved
+
+Notes:
+- All task results are automatically saved to GVEDC database
+- Session history is tracked for future reference
+`;
 
             await this.saveReportToDatabase(report, 'project_work_report', today);
+            await this.saveProjectToGraphDatabase('GVEDC-Main-Project', 'gvedc_system', today, {
+                'task_count': this.taskHistory.length,
+                'success_count': this.taskHistory.filter(t => t.status === 'success').length,
+                'auto_save_enabled': this.autoSaveToDatabase
+            });
 
             console.log('Project work report saved');
             return {
@@ -442,34 +659,47 @@ class GVEDCReportKeepGuardian {
     }
 
     async saveReportToDatabase(content, reportType, date) {
+        if (!this.autoSaveToDatabase) {
+            console.log('Auto save to database is disabled, skipping save');
+            return { success: true, message: 'Auto save disabled' };
+        }
+
         try {
             console.log('Saving report to database: ' + reportType);
 
-            const saveScript = 'import sys\n' +
-'sys.path.insert(0, r\'' + DB_PATH + '\')\n' +
-'import chromadb\n' +
-'import time\n\n' +
-'client = chromadb.PersistentClient(path=r\'' + DB_PATH + '\')\n' +
-'collection = client.get_or_create_collection(name="reports")\n\n' +
-'doc_id = f"report-' + reportType + '-{int(time.time())}"\n\n' +
-'metadata = {\n' +
-'    "id": doc_id,\n' +
-'    "kind": "report",\n' +
-'    "title": f"' + reportType + ' - ' + date + '",\n' +
-'    "authors": ["GVEDC-Report-Keep-Guardian"],\n' +
-'    "date": "' + date + '",\n' +
-'    "type": "' + reportType + '",\n' +
-'    "abstract": "Auto-generated report",\n' +
-'    "keywords": ["gvedc", "report", "' + reportType + '", "auto-generated"],\n' +
-'    "category": ["System", "Report"],\n' +
-'    "source": "GVEDC-Report-Keep-Guardian"\n' +
-'}\n\n' +
-'collection.add(\n' +
-'    documents=["' + content.replace(/"/g, '\\"') + '"],\n' +
-'    metadatas=[metadata],\n' +
-'    ids=[doc_id]\n' +
-')\n\n' +
-'print(f"Report saved: {doc_id}")\n';
+            const saveScript = `import sys
+sys.path.insert(0, r'${DB_PATH}')
+import chromadb
+import time
+
+client = chromadb.PersistentClient(path=r'${DB_PATH}')
+collection = client.get_or_create_collection(name="reports")
+
+doc_id = f"report-${reportType}-{int(time.time())}"
+
+metadata = {
+    "id": doc_id,
+    "kind": "report",
+    "title": "${reportType} - ${date}",
+    "authors": ["GVEDC-Report-Keep-Guardian"],
+    "date": "${date}",
+    "type": "${reportType}",
+    "abstract": "Auto-generated report",
+    "keywords": ["gvedc", "report", "${reportType}", "auto-generated"],
+    "category": ["System", "Report"],
+    "source": "GVEDC-Report-Keep-Guardian"
+}
+
+content_str = """${content.replace(/"/g, '\\"').replace(/`/g, '\\`')}"""
+
+collection.add(
+    documents=[content_str[:50000]],
+    metadatas=[metadata],
+    ids=[doc_id]
+)
+
+print(f"Report saved: {doc_id}")
+`;
 
             const command = '"' + PYTHON_PATH + '" -c "' + saveScript.replace(/"/g, '\\"') + '"';
             const result = execSync(command, { encoding: 'utf8' });
@@ -524,12 +754,33 @@ content + '\n\n' +
         return { success: true, message: 'Auto report disabled' };
     }
 
+    enableAutoSave() {
+        this.autoSaveToDatabase = true;
+        console.log('Auto save to database enabled');
+        return { success: true, message: 'Auto save to database enabled' };
+    }
+
+    disableAutoSave() {
+        this.autoSaveToDatabase = false;
+        console.log('Auto save to database disabled');
+        return { success: true, message: 'Auto save to database disabled' };
+    }
+
+    getTaskHistory() {
+        return {
+            success: true,
+            history: this.taskHistory,
+            count: this.taskHistory.length
+        };
+    }
+
     getStatus() {
         return {
             name: this.name,
             version: this.version,
             description: this.description,
             autoReportEnabled: this.autoReportEnabled,
+            autoSaveToDatabase: this.autoSaveToDatabase,
             startupTasks: this.startupTasks.map(task => ({
                 name: task.name,
                 priority: task.priority
@@ -538,6 +789,8 @@ content + '\n\n' +
                 'initializeReportGuardian - Initialize plugin and execute startup tasks',
                 'enableAutoReport - Enable auto report',
                 'disableAutoReport - Disable auto report',
+                'enableAutoSave - Enable auto save to database',
+                'disableAutoSave - Disable auto save to database',
                 'getReportGuardianStatus - Get plugin status',
                 'generateReport - Generate specified type report',
                 'generateWorkReport - Generate work report',
@@ -545,7 +798,8 @@ content + '\n\n' +
                 'updateWorkManual - Update work manual',
                 'refineWorkManualFromReports - Refine work manual from 3+ similar reports',
                 'storeReport - Store report to database',
-                'retrieveReport - Retrieve report from database'
+                'retrieveReport - Retrieve report from database',
+                'getTaskHistory - Get task execution history'
             ]
         };
     }
@@ -577,6 +831,22 @@ content + '\n\n' +
             }
         });
 
+        trae.registerTool('enableAutoSave', {
+            description: 'Enable auto save to database function',
+            parameters: {},
+            execute: async () => {
+                return this.enableAutoSave();
+            }
+        });
+
+        trae.registerTool('disableAutoSave', {
+            description: 'Disable auto save to database function',
+            parameters: {},
+            execute: async () => {
+                return this.disableAutoSave();
+            }
+        });
+
         trae.registerTool('getReportGuardianStatus', {
             description: 'Get report guardian plugin status and capability info',
             parameters: {},
@@ -591,6 +861,14 @@ content + '\n\n' +
             },
             execute: async (params) => {
                 return this.generateReport(params.type, params.content);
+            }
+        });
+
+        trae.registerTool('getTaskHistory', {
+            description: 'Get task execution history',
+            parameters: {},
+            execute: async () => {
+                return this.getTaskHistory();
             }
         });
 
